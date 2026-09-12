@@ -1,0 +1,23 @@
+{
+  "block.statues20.statue": "Statue",
+  "block.statues20.showcase": "Showcase",
+  "item.statues20.showcase": "Showcase",
+  "container.statues20.statue": "Statue",
+  "container.statues20.showcase": "Showcase",
+  "item.statues20.sculpting_hammer": "Sculpting Hammer",
+  "item.statues20.palette": "Palette",
+  "gui.statues20.sculpt": "Sculpt Statue",
+  "gui.statues20.player_name": "Player name",
+  "gui.statues20.randomize": "Randomize",
+  "gui.statues20.sculpt_button": "Sculpt!",
+  "gui.statues20.pose_help": "Drag the six pose pads to shape the statue",
+  "gui.statues20.apply": "Apply",
+  "message.statues20.need_pair": "The hammer needs two identical sculptable blocks stacked vertically.",
+  "message.statues20.pose_copied": "Copied this statue pose into the hammer.",
+  "creativetab.statues20": "Statues20",
+  "gui.statues20.left_item": "Left item",
+  "gui.statues20.right_item": "Right item",
+  "message.statues20.paint": "Painted statue",
+  "tooltip.statues20.hammer": "Sculpt two matching stacked blocks",
+  "tooltip.statues20.palette": "Paint a statue into full player colors"
+}

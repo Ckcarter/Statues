@@ -1,0 +1,1 @@
+{"parent":"minecraft:block/cube","textures":{"down":"minecraft:block/oak_planks","up":"minecraft:block/glass","north":"minecraft:block/glass","south":"minecraft:block/glass","west":"minecraft:block/glass","east":"minecraft:block/glass","particle":"minecraft:block/oak_planks"}}

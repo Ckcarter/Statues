@@ -1,0 +1,4 @@
+{
+  "copy": {"category":"block","sounds":["statues20:copy"]},
+  "paint": {"category":"block","sounds":["statues20:paint1","statues20:paint2","statues20:paint3"]}
+}
