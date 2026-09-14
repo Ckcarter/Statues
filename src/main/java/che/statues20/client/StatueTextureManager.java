@@ -39,7 +39,15 @@ public final class StatueTextureManager {
     private record Key(String player, String state) {}
     private static final Map<Key, ResourceLocation> READY = new ConcurrentHashMap<>();
     private static final Map<Key, Boolean> PENDING = new ConcurrentHashMap<>();
+    private static final Map<String, Boolean> SLIM = new ConcurrentHashMap<>();
     private static final ResourceLocation DEFAULT = DefaultPlayerSkin.getDefaultSkin(new UUID(0L, 0L));
+
+
+    /** Returns the geometry type advertised by the downloaded skin. Defaults to classic until known. */
+    public static boolean isSlim(String playerName) {
+        if (playerName == null) return false;
+        return SLIM.getOrDefault(playerName.trim().toLowerCase(Locale.ROOT), Boolean.FALSE);
+    }
 
     public static ResourceLocation texture(String playerName, BlockState sourceState) {
         String name = playerName == null ? "" : playerName.trim();
@@ -83,7 +91,12 @@ public final class StatueTextureManager {
             }
             if (value == null) throw new IllegalStateException("No textures property");
             JsonObject payload = JsonParser.parseString(new String(Base64.getDecoder().decode(value), StandardCharsets.UTF_8)).getAsJsonObject();
-            String skinUrl = payload.getAsJsonObject("textures").getAsJsonObject("SKIN").get("url").getAsString();
+            JsonObject skinInfo = payload.getAsJsonObject("textures").getAsJsonObject("SKIN");
+            String skinUrl = skinInfo.get("url").getAsString();
+            boolean slim = skinInfo.has("metadata")
+                    && skinInfo.getAsJsonObject("metadata").has("model")
+                    && "slim".equalsIgnoreCase(skinInfo.getAsJsonObject("metadata").get("model").getAsString());
+            SLIM.put(name.trim().toLowerCase(Locale.ROOT), slim);
 
             HttpURLConnection con = (HttpURLConnection) URI.create(skinUrl).toURL().openConnection();
             con.setConnectTimeout(5000); con.setReadTimeout(8000); con.setRequestProperty("User-Agent", "Statues20/0.4");
@@ -105,12 +118,62 @@ public final class StatueTextureManager {
     }
 
     private static NativeImage normalize(NativeImage source) {
-        if (source.getWidth() == 64 && source.getHeight() == 64) {
-            NativeImage copy = new NativeImage(64, 64, true); copy.copyFrom(source); return copy;
-        }
         NativeImage out = new NativeImage(64, 64, true);
-        source.resizeSubRectTo(0, 0, source.getWidth(), source.getHeight(), out);
+
+        if (source.getWidth() == 64 && source.getHeight() == 64) {
+            out.copyFrom(source);
+        } else if (source.getWidth() == 64 && source.getHeight() == 32) {
+            // Legacy Minecraft skin: preserve the original 64x32 UVs in the top half.
+            // The old format has only right arm/right leg data, so mirror those texture
+            // regions into the modern left arm/left leg locations rather than stretching.
+            for (int y = 0; y < 32; y++) {
+                for (int x = 0; x < 64; x++) {
+                    out.setPixelRGBA(x, y, source.getPixelRGBA(x, y));
+                }
+            }
+            mirrorRegion(out, source, 0, 16, 16, 16, 16, 48);   // right leg -> left leg
+            mirrorRegion(out, source, 40, 16, 16, 16, 32, 48);  // right arm -> left arm
+        } else {
+            // Non-standard skins are copied without distorting their aspect ratio/UVs.
+            int w = Math.min(64, source.getWidth());
+            int h = Math.min(64, source.getHeight());
+            for (int y = 0; y < h; y++) {
+                for (int x = 0; x < w; x++) {
+                    out.setPixelRGBA(x, y, source.getPixelRGBA(x, y));
+                }
+            }
+        }
+
+        // Vanilla player rendering treats the base skin surfaces as opaque. Only the
+        // second layers (hat/jacket/sleeves/pants) are allowed to retain transparency.
+        forceOpaqueBase(out);
         return out;
+    }
+
+    private static void mirrorRegion(NativeImage dest, NativeImage src, int sx, int sy, int w, int h, int dx, int dy) {
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                dest.setPixelRGBA(dx + x, dy + y, src.getPixelRGBA(sx + (w - 1 - x), sy + y));
+            }
+        }
+    }
+
+    private static void forceOpaqueBase(NativeImage image) {
+        forceOpaque(image, 0, 0, 32, 16);     // head
+        forceOpaque(image, 0, 16, 16, 16);    // right leg
+        forceOpaque(image, 16, 16, 24, 16);   // body
+        forceOpaque(image, 40, 16, 16, 16);   // right arm
+        forceOpaque(image, 16, 48, 16, 16);   // left leg
+        forceOpaque(image, 32, 48, 16, 16);   // left arm
+    }
+
+    private static void forceOpaque(NativeImage image, int x0, int y0, int w, int h) {
+        for (int y = y0; y < y0 + h; y++) {
+            for (int x = x0; x < x0 + w; x++) {
+                int p = image.getPixelRGBA(x, y);
+                image.setPixelRGBA(x, y, p | 0xFF000000);
+            }
+        }
     }
 
     private static void registerBuiltTexture(Key key, NativeImage skin, BlockState sourceState) {
@@ -158,11 +221,13 @@ public final class StatueTextureManager {
     /** Exact overlay-style blend used by ImageStatueBufferDownload in the old mod. */
     private static int overlay(int skin, int material) {
         int sr = skin & 255, sg = (skin >>> 8) & 255, sb = (skin >>> 16) & 255, sa = (skin >>> 24) & 255;
-        int mr = material & 255, mg = (material >>> 8) & 255, mb = (material >>> 16) & 255, ma = (material >>> 24) & 255;
+        int mr = material & 255, mg = (material >>> 8) & 255, mb = (material >>> 16) & 255;
         double luminance = (0.2125 * sr + 0.7154 * sg + 0.0721 * sb) / 255.0;
         luminance = Math.min(1.0, luminance * 4.0 / 3.0);
         int r = blendChannel(mr, luminance), g = blendChannel(mg, luminance), b = blendChannel(mb, luminance);
-        int a = sa * ma / 255;
+        // Keep the skin's alpha. Multiplying by the source block alpha can erase the
+        // player's body or second-layer hat when sculpting from glass/leaves/etc.
+        int a = sa;
         return r | (g << 8) | (b << 16) | (a << 24);
     }
 

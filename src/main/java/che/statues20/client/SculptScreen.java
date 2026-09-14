@@ -41,7 +41,8 @@ public class SculptScreen extends AbstractContainerScreen<SculptMenu> {
     private StatuePose pose;
     private final Random random = new Random();
     private PosePad ar, al, rr, ll, head, body;
-    private PlayerModel<LivingEntity> previewModel;
+    private PlayerModel<LivingEntity> previewClassic;
+    private PlayerModel<LivingEntity> previewSlim;
 
     public SculptScreen(SculptMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title);
@@ -54,8 +55,10 @@ public class SculptScreen extends AbstractContainerScreen<SculptMenu> {
     @SuppressWarnings({"rawtypes", "unchecked"})
     @Override protected void init() {
         super.init();
-        previewModel = new PlayerModel(Minecraft.getInstance().getEntityModels().bakeLayer(ModelLayers.PLAYER), false);
-        previewModel.setAllVisible(true);
+        previewClassic = new PlayerModel(Minecraft.getInstance().getEntityModels().bakeLayer(ModelLayers.PLAYER), false);
+        previewSlim = new PlayerModel(Minecraft.getInstance().getEntityModels().bakeLayer(ModelLayers.PLAYER_SLIM), true);
+        preparePreviewModel(previewClassic);
+        preparePreviewModel(previewSlim);
         int x = leftPos, y = topPos;
 
         // Old GuiSculpt pad order/semantics, including left-side axis inversions.
@@ -104,11 +107,24 @@ public class SculptScreen extends AbstractContainerScreen<SculptMenu> {
         renderPreview(g);
     }
 
+    private static void preparePreviewModel(PlayerModel<?> model) {
+        model.setAllVisible(true);
+        model.hat.visible = true;
+        model.jacket.visible = true;
+        model.leftSleeve.visible = true;
+        model.rightSleeve.visible = true;
+        model.leftPants.visible = true;
+        model.rightPants.visible = true;
+    }
+
     private void renderPreview(GuiGraphics graphics) {
-        if (previewModel == null || minecraft.level == null) return;
+        if (previewClassic == null || previewSlim == null || minecraft.level == null) return;
         BlockState source = minecraft.level.getBlockState(menu.sourcePos);
+        String skinName = skin == null ? LAST_SKIN : skin.getValue();
+        PlayerModel<LivingEntity> previewModel = StatueTextureManager.isSlim(skinName) ? previewSlim : previewClassic;
+        preparePreviewModel(previewModel);
         StatuePoseApplier.apply(previewModel, pose);
-        ResourceLocation texture = StatueTextureManager.texture(skin == null ? LAST_SKIN : skin.getValue(), source);
+        ResourceLocation texture = StatueTextureManager.texture(skinName, source);
 
         PoseStack ps = graphics.pose();
         ps.pushPose();

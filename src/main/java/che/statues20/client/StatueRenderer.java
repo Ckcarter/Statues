@@ -40,24 +40,29 @@ public class StatueRenderer implements BlockEntityRenderer<StatueBlockEntity> {
     // The original statue occupies a full two-block-high sculpted column.
     // The raw player model spans exactly 32 model pixels (2 blocks) from head top to feet,
     // so a 1.0 scale makes the rendered statue exactly two blocks tall.
-    private static final float STATUE_SCALE = 1.0F;
-    private final PlayerModel<LivingEntity> model;
+    private static final float STATUE_SCALE = 1.7F;
+    private final PlayerModel<LivingEntity> classicModel;
+    private final PlayerModel<LivingEntity> slimModel;
     private final HumanoidModel<LivingEntity> armorInner;
     private final HumanoidModel<LivingEntity> armorOuter;
     private static final Map<String, ResourceLocation> ARMOR_TEXTURES = new HashMap<>();
 
     @SuppressWarnings({"rawtypes", "unchecked"})
     public StatueRenderer(BlockEntityRendererProvider.Context context) {
-        model = new PlayerModel(context.bakeLayer(ModelLayers.PLAYER), false);
+        classicModel = new PlayerModel(context.bakeLayer(ModelLayers.PLAYER), false);
+        slimModel = new PlayerModel(context.bakeLayer(ModelLayers.PLAYER_SLIM), true);
         armorInner = new HumanoidModel(context.bakeLayer(ModelLayers.PLAYER_INNER_ARMOR));
         armorOuter = new HumanoidModel(context.bakeLayer(ModelLayers.PLAYER_OUTER_ARMOR));
-        model.setAllVisible(true);
+        preparePlayerModel(classicModel);
+        preparePlayerModel(slimModel);
     }
 
     @Override
     public void render(StatueBlockEntity statue, float partialTick, PoseStack poseStack,
                        MultiBufferSource buffers, int packedLight, int packedOverlay) {
         StatuePose pose = statue.getPose();
+        PlayerModel<LivingEntity> model = StatueTextureManager.isSlim(statue.getSkinName()) ? slimModel : classicModel;
+        preparePlayerModel(model);
         StatuePoseApplier.apply(model, pose);
         float legOffset = StatuePoseApplier.legHeightOffset(model);
 
@@ -75,31 +80,79 @@ public class StatueRenderer implements BlockEntityRenderer<StatueBlockEntity> {
         poseStack.translate(0.0, -1.5 + legOffset * 0.41F, 0.0);
 
         ResourceLocation skin = StatueTextureManager.texture(statue.getSkinName(), statue.getSourceState());
-        VertexConsumer playerVertices = buffers.getBuffer(RenderType.entityTranslucent(skin));
-        model.renderToBuffer(poseStack, playerVertices, packedLight, OverlayTexture.NO_OVERLAY, 1, 1, 1, 1);
 
-        renderArmor(statue, poseStack, buffers, packedLight);
-        renderHeadItem(statue.getItem(StatueBlockEntity.HELMET), poseStack, buffers, packedLight);
-        renderHeldItem(statue.getItem(StatueBlockEntity.MAIN_HAND), true, pose.itemRightA,
+        // Render the actual player skin as an opaque/cutout pass first. This prevents the
+        // body/head texture from disappearing or sorting incorrectly as a translucent BER.
+        setBaseSkinVisible(model);
+        VertexConsumer baseVertices = buffers.getBuffer(RenderType.entityCutoutNoCull(skin));
+        model.renderToBuffer(poseStack, baseVertices, packedLight, OverlayTexture.NO_OVERLAY, 1, 1, 1, 1);
+
+        // The Minecraft skin's second layer (hat/jacket/sleeves/pants) must keep alpha, so
+        // render it in its own translucent pass. In particular this guarantees the hat layer
+        // is drawn independently instead of being lost in the base pass.
+        setOuterSkinVisible(model);
+        VertexConsumer overlayVertices = buffers.getBuffer(RenderType.entityTranslucent(skin));
+        model.renderToBuffer(poseStack, overlayVertices, packedLight, OverlayTexture.NO_OVERLAY, 1, 1, 1, 1);
+
+        // Restore the complete player model before armor/items copy poses from it.
+        preparePlayerModel(model);
+        StatuePoseApplier.apply(model, pose);
+
+        renderArmor(statue, model, poseStack, buffers, packedLight);
+        renderHeadItem(model, statue.getItem(StatueBlockEntity.HELMET), poseStack, buffers, packedLight);
+        renderHeldItem(model, statue.getItem(StatueBlockEntity.MAIN_HAND), true, pose.itemRightA,
                 poseStack, buffers, packedLight);
         // Old RenderPlayerStatue passes 1-itemLeftA for the left arm.
-        renderHeldItem(statue.getItem(StatueBlockEntity.OFF_HAND), false, 1.0F - pose.itemLeftA,
+        renderHeldItem(model, statue.getItem(StatueBlockEntity.OFF_HAND), false, 1.0F - pose.itemLeftA,
                 poseStack, buffers, packedLight);
         poseStack.popPose();
     }
 
-    private void renderArmor(StatueBlockEntity statue, PoseStack ps, MultiBufferSource buffers, int light) {
-        renderArmorPiece(statue.getItem(StatueBlockEntity.HELMET), EquipmentSlot.HEAD, armorOuter, false, ps, buffers, light);
-        renderArmorPiece(statue.getItem(StatueBlockEntity.CHEST), EquipmentSlot.CHEST, armorOuter, false, ps, buffers, light);
-        renderArmorPiece(statue.getItem(StatueBlockEntity.LEGS), EquipmentSlot.LEGS, armorInner, true, ps, buffers, light);
-        renderArmorPiece(statue.getItem(StatueBlockEntity.BOOTS), EquipmentSlot.FEET, armorOuter, false, ps, buffers, light);
+
+    private static void setBaseSkinVisible(PlayerModel<?> model) {
+        model.setAllVisible(false);
+        model.head.visible = true;
+        model.body.visible = true;
+        model.leftArm.visible = true;
+        model.rightArm.visible = true;
+        model.leftLeg.visible = true;
+        model.rightLeg.visible = true;
     }
 
-    private void renderArmorPiece(ItemStack stack, EquipmentSlot slot, HumanoidModel<LivingEntity> baseModel,
+    private static void setOuterSkinVisible(PlayerModel<?> model) {
+        model.setAllVisible(false);
+        model.hat.visible = true;
+        model.jacket.visible = true;
+        model.leftSleeve.visible = true;
+        model.rightSleeve.visible = true;
+        model.leftPants.visible = true;
+        model.rightPants.visible = true;
+    }
+
+    private static void preparePlayerModel(PlayerModel<?> model) {
+        model.setAllVisible(true);
+        // PlayerModel outer skin layers are separate model parts. Keep all of them enabled so
+        // hats, jackets, sleeves and pants overlays render exactly like a normal player skin.
+        model.hat.visible = true;
+        model.jacket.visible = true;
+        model.leftSleeve.visible = true;
+        model.rightSleeve.visible = true;
+        model.leftPants.visible = true;
+        model.rightPants.visible = true;
+    }
+
+    private void renderArmor(StatueBlockEntity statue, PlayerModel<LivingEntity> playerModel, PoseStack ps, MultiBufferSource buffers, int light) {
+        renderArmorPiece(playerModel, statue.getItem(StatueBlockEntity.HELMET), EquipmentSlot.HEAD, armorOuter, false, ps, buffers, light);
+        renderArmorPiece(playerModel, statue.getItem(StatueBlockEntity.CHEST), EquipmentSlot.CHEST, armorOuter, false, ps, buffers, light);
+        renderArmorPiece(playerModel, statue.getItem(StatueBlockEntity.LEGS), EquipmentSlot.LEGS, armorInner, true, ps, buffers, light);
+        renderArmorPiece(playerModel, statue.getItem(StatueBlockEntity.BOOTS), EquipmentSlot.FEET, armorOuter, false, ps, buffers, light);
+    }
+
+    private void renderArmorPiece(PlayerModel<LivingEntity> playerModel, ItemStack stack, EquipmentSlot slot, HumanoidModel<LivingEntity> baseModel,
                                   boolean inner, PoseStack ps, MultiBufferSource buffers, int light) {
         if (!(stack.getItem() instanceof ArmorItem armor) || armor.getEquipmentSlot() != slot) return;
 
-        StatuePoseApplier.copyToArmor(model, baseModel);
+        StatuePoseApplier.copyToArmor(playerModel, baseModel);
         setArmorVisible(baseModel, slot);
         LivingEntity renderEntity = Minecraft.getInstance().player;
         Model armorModel = renderEntity == null ? baseModel : ForgeHooksClient.getArmorModel(renderEntity, stack, slot, baseModel);
@@ -146,7 +199,7 @@ public class StatueRenderer implements BlockEntityRenderer<StatueBlockEntity> {
         model.renderToBuffer(ps, vc, light, OverlayTexture.NO_OVERLAY, r, g, b, 1.0F);
     }
 
-    private void renderHeadItem(ItemStack stack, PoseStack ps, MultiBufferSource buffers, int light) {
+    private void renderHeadItem(PlayerModel<LivingEntity> model, ItemStack stack, PoseStack ps, MultiBufferSource buffers, int light) {
         if (stack.isEmpty() || stack.getItem() instanceof ArmorItem || !(stack.getItem() instanceof BlockItem)) return;
         ps.pushPose();
         model.head.translateAndRotate(ps);
@@ -157,7 +210,7 @@ public class StatueRenderer implements BlockEntityRenderer<StatueBlockEntity> {
         ps.popPose();
     }
 
-    private void renderHeldItem(ItemStack stack, boolean right, float angle, PoseStack ps,
+    private void renderHeldItem(PlayerModel<LivingEntity> model, ItemStack stack, boolean right, float angle, PoseStack ps,
                                 MultiBufferSource buffers, int light) {
         if (stack.isEmpty()) return;
         ps.pushPose();
