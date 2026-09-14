@@ -113,7 +113,9 @@ public class SculptScreen extends AbstractContainerScreen<SculptMenu> {
         PoseStack ps = graphics.pose();
         ps.pushPose();
         ps.translate(leftPos + imageWidth/2.0F, topPos + 145.0F, 100.0F);
-        ps.scale(42.0F, -42.0F, 42.0F);
+        // GUI coordinates already grow downward on Y. A negative Y scale here turns the
+        // preview upside down; keep Y positive for an upright player preview.
+        ps.scale(42.0F, 42.0F, 42.0F);
         ps.mulPose(Axis.YP.rotationDegrees(180.0F + StatuePoseApplier.bodyYawDegrees(pose)));
         ps.mulPose(Axis.XP.rotationDegrees(StatuePoseApplier.bodyPitchDegrees(pose)));
         ps.translate(0, -1.5 + StatuePoseApplier.legHeightOffset(previewModel) * 0.41F, 0);

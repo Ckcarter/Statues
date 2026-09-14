@@ -23,6 +23,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.AABB;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -47,6 +48,12 @@ public class StatueBlockEntity extends BlockEntity implements Container, MenuPro
 
     public StatueBlockEntity(BlockPos pos, BlockState state) {
         super(Statues20.STATUE_BE.get(), pos, state);
+    }
+
+    /** The statue renderer occupies both the lower and upper statue blocks. */
+    @Override
+    public AABB getRenderBoundingBox() {
+        return new AABB(worldPosition, worldPosition.offset(1, 2, 1));
     }
 
     public String getSkinName() { return skinName; }

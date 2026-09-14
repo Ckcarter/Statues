@@ -37,6 +37,10 @@ import java.util.Map;
  * player skin, four armor passes, two held items, and the original normalized hand angles.
  */
 public class StatueRenderer implements BlockEntityRenderer<StatueBlockEntity> {
+    // The original statue occupies a full two-block-high sculpted column.
+    // The raw player model spans exactly 32 model pixels (2 blocks) from head top to feet,
+    // so a 1.0 scale makes the rendered statue exactly two blocks tall.
+    private static final float STATUE_SCALE = 1.0F;
     private final PlayerModel<LivingEntity> model;
     private final HumanoidModel<LivingEntity> armorInner;
     private final HumanoidModel<LivingEntity> armorOuter;
@@ -66,7 +70,7 @@ public class StatueRenderer implements BlockEntityRenderer<StatueBlockEntity> {
         poseStack.mulPose(Axis.YP.rotationDegrees(StatuePoseApplier.bodyYawDegrees(pose)));
         poseStack.mulPose(Axis.XP.rotationDegrees(StatuePoseApplier.bodyPitchDegrees(pose)));
 
-        poseStack.scale(1.0F, -1.0F, -1.0F);
+        poseStack.scale(STATUE_SCALE, -STATUE_SCALE, -STATUE_SCALE);
         // Recreates the old bent-leg floor compensation closely in model-space units.
         poseStack.translate(0.0, -1.5 + legOffset * 0.41F, 0.0);
 

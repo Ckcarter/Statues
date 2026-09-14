@@ -3,10 +3,10 @@ loaderVersion="[47,)"
 license="GPL-2.0-only"
 [[mods]]
 modId="statues20"
-version="0.4.0"
+version="0.5.1"
 displayName="Statues20"
 authors="ChÃ©"
-description='''A deep Forge 1.20.1 recreation of the classic Statues sculpting mod, including pose sculpting, materialized player statues, equipment and showcases.'''
+description='''A Forge 1.20.1 recreation targeting the Doenerstyle Statues 2.2.1 fork, including pose sculpting, materialized player statues, equipment and showcases.'''
 [[dependencies.statues20]]
 modId="forge"
 mandatory=true
