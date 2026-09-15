@@ -40,7 +40,7 @@ public class StatueRenderer implements BlockEntityRenderer<StatueBlockEntity> {
     // The original statue occupies a full two-block-high sculpted column.
     // The raw player model spans exactly 32 model pixels (2 blocks) from head top to feet,
     // so a 1.0 scale makes the rendered statue exactly two blocks tall.
-    private static final float STATUE_SCALE = 1.7F;
+    private static final float STATUE_SCALE = 1.0F;
     private final PlayerModel<LivingEntity> classicModel;
     private final PlayerModel<LivingEntity> slimModel;
     private final HumanoidModel<LivingEntity> armorInner;
@@ -81,18 +81,31 @@ public class StatueRenderer implements BlockEntityRenderer<StatueBlockEntity> {
 
         ResourceLocation skin = StatueTextureManager.texture(statue.getSkinName(), statue.getSourceState());
 
-        // Render the actual player skin as an opaque/cutout pass first. This prevents the
-        // body/head texture from disappearing or sorting incorrectly as a translucent BER.
-        setBaseSkinVisible(model);
+        // Draw the base skin explicitly so its UVs use the normal PlayerModel parts.
         VertexConsumer baseVertices = buffers.getBuffer(RenderType.entityCutoutNoCull(skin));
-        model.renderToBuffer(poseStack, baseVertices, packedLight, OverlayTexture.NO_OVERLAY, 1, 1, 1, 1);
+        model.head.render(poseStack, baseVertices, packedLight, OverlayTexture.NO_OVERLAY, 1, 1, 1, 1);
+        model.body.render(poseStack, baseVertices, packedLight, OverlayTexture.NO_OVERLAY, 1, 1, 1, 1);
+        model.leftArm.render(poseStack, baseVertices, packedLight, OverlayTexture.NO_OVERLAY, 1, 1, 1, 1);
+        model.rightArm.render(poseStack, baseVertices, packedLight, OverlayTexture.NO_OVERLAY, 1, 1, 1, 1);
+        model.leftLeg.render(poseStack, baseVertices, packedLight, OverlayTexture.NO_OVERLAY, 1, 1, 1, 1);
+        model.rightLeg.render(poseStack, baseVertices, packedLight, OverlayTexture.NO_OVERLAY, 1, 1, 1, 1);
 
-        // The Minecraft skin's second layer (hat/jacket/sleeves/pants) must keep alpha, so
-        // render it in its own translucent pass. In particular this guarantees the hat layer
-        // is drawn independently instead of being lost in the base pass.
-        setOuterSkinVisible(model);
+        // The hat is part of the skin, not the armor renderer. Copy the head pose and render
+        // the second head layer explicitly. Do the same for the other modern outer layers.
+        model.hat.copyFrom(model.head);
+        model.jacket.copyFrom(model.body);
+        model.leftSleeve.copyFrom(model.leftArm);
+        model.rightSleeve.copyFrom(model.rightArm);
+        model.leftPants.copyFrom(model.leftLeg);
+        model.rightPants.copyFrom(model.rightLeg);
+
         VertexConsumer overlayVertices = buffers.getBuffer(RenderType.entityTranslucent(skin));
-        model.renderToBuffer(poseStack, overlayVertices, packedLight, OverlayTexture.NO_OVERLAY, 1, 1, 1, 1);
+        model.hat.render(poseStack, overlayVertices, packedLight, OverlayTexture.NO_OVERLAY, 1, 1, 1, 1);
+        model.jacket.render(poseStack, overlayVertices, packedLight, OverlayTexture.NO_OVERLAY, 1, 1, 1, 1);
+        model.leftSleeve.render(poseStack, overlayVertices, packedLight, OverlayTexture.NO_OVERLAY, 1, 1, 1, 1);
+        model.rightSleeve.render(poseStack, overlayVertices, packedLight, OverlayTexture.NO_OVERLAY, 1, 1, 1, 1);
+        model.leftPants.render(poseStack, overlayVertices, packedLight, OverlayTexture.NO_OVERLAY, 1, 1, 1, 1);
+        model.rightPants.render(poseStack, overlayVertices, packedLight, OverlayTexture.NO_OVERLAY, 1, 1, 1, 1);
 
         // Restore the complete player model before armor/items copy poses from it.
         preparePlayerModel(model);
@@ -109,25 +122,6 @@ public class StatueRenderer implements BlockEntityRenderer<StatueBlockEntity> {
     }
 
 
-    private static void setBaseSkinVisible(PlayerModel<?> model) {
-        model.setAllVisible(false);
-        model.head.visible = true;
-        model.body.visible = true;
-        model.leftArm.visible = true;
-        model.rightArm.visible = true;
-        model.leftLeg.visible = true;
-        model.rightLeg.visible = true;
-    }
-
-    private static void setOuterSkinVisible(PlayerModel<?> model) {
-        model.setAllVisible(false);
-        model.hat.visible = true;
-        model.jacket.visible = true;
-        model.leftSleeve.visible = true;
-        model.rightSleeve.visible = true;
-        model.leftPants.visible = true;
-        model.rightPants.visible = true;
-    }
 
     private static void preparePlayerModel(PlayerModel<?> model) {
         model.setAllVisible(true);
